@@ -1,48 +1,74 @@
+from flask import Flask, request, jsonify, render_template
+from flask_restful import Resource, Api
 import os
-from flask import Flask, request
-# from sam_rest import sam_endpoints
+try:
+    from flask.ext.cors import CORS
+except ImportError:
+    cors = False
+from REST import exponential_rest as exponential
+
+
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
+os.environ.update({
+    'PROJECT_ROOT': PROJECT_ROOT
+})
 
 
 app = Flask(__name__)
+api = Api(app)
+try:
+    CORS(app)
+except Exception as e:
+    print(str(e))
 
 
 @app.route('/')
 def hello_world():
     import sys
     version = sys.version
-    return 'Hello World! Python Version = %s' % version
+    return 'Poptox REST Server. Python Version = %s' % version
 
 
-@app.route('/rest/sam', methods=['GET', 'POST'])
-def sam_endpoint():
+# Declare endpoints for each model
+# These are the endpoints that will be introspected by the swagger() method & shown on API spec page
+# TODO: Add model endpoints here once they are refactored
+api.add_resource(exponential.ExponentialGet, '/rest/poptox/exponential/')
+api.add_resource(exponential.ExponentialPost, '/rest/poptox/exponential/<string:jobId>')
 
-    if request.method == 'POST':
-        """
-        Generate 'SAM.inp' from user provided input JSON and return contents of 'SAM.inp' to user
-        """
-        from sam.Tool import pesticide_calculator as calc
 
-        calc.main(request.json["inputs"])
-        return "SAM Run Submitted"
-        # return sam_endpoints.sam_input_prep(
-        #     no_of_processes=1,
-        #     name_temp=None,
-        #     temp_sam_run_path=None,
-        #     args=request.json["inputs"]
-        # )
+@app.route("/api/spec/")
+def spec():
+    """
+    Route that returns the Swagger formatted JSON representing the Ubertool API.
+    :return: Swagger formatted JSON string
+    """
+    # from flask_swagger import swagger
+    from uber_swagger import swagger
 
-    if request.method == 'GET':
-        """
-        Return contents of default Mark Twain 'SAM.inp' to user
-        """
-        default_sam_input = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            'sam', 'bin', 'MarkTwain', 'Inputs', 'SAM.inp'
-        )
-        return sam_endpoints.read_sam_input_file(default_sam_input)
+    swag = swagger(app)
 
-    return "Error"
+    # TODO: Use in production and remove 'jsonify' below
+    # return json.dumps(
+    #     swag,
+    #     separators=(',', ':')  # This produces a 'minified' JSON output
+    # )
+
+    return jsonify(swag)  # This produces a 'pretty printed' JSON output
+
+
+@app.route("/api/")
+def api_doc():
+    """
+    Route to serve the API documentation (Swagger UI) static page being served by the backend.
+    :return:
+    """
+    return render_template('index.html')
+
+
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template('404.html'), 404
 
 
 if __name__ == '__main__':
-    app.run(port=7778, debug=True)
+    app.run(port=7779, debug=True)
